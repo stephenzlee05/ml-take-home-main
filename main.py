@@ -42,39 +42,35 @@ prompt = tokenizer.apply_chat_template(
 
 def contrastive_generation(amateur, expert, prompt, max_tokens=50) -> str:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
     amateur = amateur.to(device).eval()
     expert = expert.to(device).eval()
     
-    # Tokenize input and ensure proper tensor format
     inputs = tokenizer(prompt, return_tensors="pt").to(device)
     input_ids = inputs.input_ids
     
     for _ in range(max_tokens):
         with torch.no_grad():
+            # Get logits
             amateur_logits = amateur(input_ids).logits[:, -1, :]
             expert_logits = expert(input_ids).logits[:, -1, :]
             
-            # Sharper contrast + lower temperature for brevity
-            logits = expert_logits - 0.5 * amateur_logits  # Increased amateur penalty
-            probs = torch.softmax(logits / 0.5, dim=-1)  # Lower temperature
+            # Stable log difference with clamping
+            expert_lprobs = F.log_softmax(expert_logits / 0.7, dim=-1)  # Smoother expert
+            amateur_lprobs = F.log_softmax(amateur_logits / 1.0, dim=-1)  # Less sharp amateur
+            
+            # Controlled contrast
+            logits = expert_lprobs - 0.3 * amateur_lprobs  # Reduced amateur penalty
+            
+            # Numerically stable softmax
+            probs = torch.softmax(logits / 0.7, dim=-1)  # Higher temperature
             
             next_token = torch.multinomial(probs, num_samples=1)
 
-        # Force early stopping if natural breakpoint
-        if next_token.item() in [tokenizer.eos_token_id, tokenizer.convert_tokens_to_ids(".")]:
+        if next_token.item() == tokenizer.eos_token_id:
             break
-            
         input_ids = torch.cat([input_ids, next_token], dim=-1)
     
-    # Convert to proper integer list format
-    output_ids = input_ids[0].tolist()  # This converts tensor to List[int]
-    
-    # Decode only the generated portion (after initial prompt)
-    prompt_length = inputs.input_ids.shape[1]
-    generated_ids = output_ids[prompt_length:]
-    
-    return tokenizer.decode(generated_ids, skip_special_tokens=True).strip()
+    return tokenizer.decode(input_ids[0][inputs.input_ids.shape[1]:], skip_special_tokens=True)
 
 if __name__ == "__main__":
     amateur = tr.AutoModelForCausalLM.from_pretrained(amateur_path, torch_dtype=torch.bfloat16)
