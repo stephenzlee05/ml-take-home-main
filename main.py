@@ -40,7 +40,7 @@ prompt = tokenizer.apply_chat_template(
     tokenize=False,
 )
 
-def contrastive_generation(amateur, expert, prompt, max_tokens=60) -> str:
+def contrastive_generation(amateur, expert, prompt, max_tokens=60, temperature=0.6, completion_token=30) -> str:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     amateur = amateur.to(device).eval()
     expert = expert.to(device).eval()
@@ -65,10 +65,10 @@ def contrastive_generation(amateur, expert, prompt, max_tokens=60) -> str:
             logits = expert_lprobs - 0.3 * amateur_lprobs  # Reduced amateur penalty
             
             # Numerically stable softmax
-            probs = torch.softmax(logits / 0.6, dim=-1)
+            probs = torch.softmax(logits / temperature, dim=-1)
             
             # Penalize non-ending tokens in later steps
-            if i > 30:  # After 30 tokens, encourage completion
+            if i > completion_token:  # After 30 tokens, encourage completion
                 probs[:, tokenizer.eos_token_id] *= 2
                 probs[:, tokenizer.convert_tokens_to_ids(".")] *= 1.5
                 
