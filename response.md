@@ -1,0 +1,7 @@
+1. What should you do if the two models have different tokenizers?
+
+If the two models use different tokenizers, direct contrastive decoding becomes technically unworkable due to vocabulary and tokenization mismatches. Tokenizers map text to unique numeric IDs, and discrepancies in vocabulary size, splitting rules, or special token definitions would render logit comparisons meaningless.Theoretical solutions like cross-tokenizer alignment exist, but these require complex, lossy mappings and are rarely practical. Practical implementations typically avoid this issue entirely by restricting contrastive decoding to models within the same architectural family that share tokenization schemes, such as pairing Qwen’s 0.5B and 1.5B models, to ensure token compatibility and meaningful logit comparisons.
+
+2. Do you think contrastive decoding is used in practice?
+
+Contrastive decoding primarily used in research or specialized domains where output quality outweighs computational costs. Its practical adoption is limited by running two models simultaneously which doubles inference costs. Most industry systems still favor single-model optimizations for efficiency, though there might be some niche applications such as high-value domains (medical/legal text). In the use case of code generation, where correctness matters, contrastive decoding may be used.
